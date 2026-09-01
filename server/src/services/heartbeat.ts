@@ -20626,11 +20626,12 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
       companyId: string,
       agentId?: string,
       limit?: number,
+      offset?: number,
       options: { summary?: boolean } = {},
     ) => {
       const safeForLegacyEncoding = await hasUnsafeTextProjectionDatabase();
       const summary = options.summary === true;
-      const query = db
+      let query = db
         .select(
           summary
             ? {
@@ -20655,9 +20656,12 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
             ? and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.agentId, agentId))
             : eq(heartbeatRuns.companyId, companyId),
         )
-        .orderBy(desc(heartbeatRuns.createdAt));
+        .orderBy(desc(heartbeatRuns.createdAt), desc(heartbeatRuns.id))
+        .$dynamic();
 
-      const rows = limit ? await query.limit(limit) : await query;
+      if (limit !== undefined) query = query.limit(limit);
+      if (offset !== undefined && offset > 0) query = query.offset(offset);
+      const rows = await query;
       return rows.map((row) => {
         const {
           contextIssueId,
@@ -20708,6 +20712,86 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
                 totalCostUsd: resultTotalCostUsd,
                 costUsd: resultCostUsd,
                 costUsdCamel: resultCostUsdCamel,
+              }),
+        };
+      });
+    },
+
+    stats: async (companyId: string, agentId?: string) => {
+      const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+      const condition = agentId
+        ? and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.agentId, agentId), gt(heartbeatRuns.createdAt, fourteenDaysAgo))
+        : and(eq(heartbeatRuns.companyId, companyId), gt(heartbeatRuns.createdAt, fourteenDaysAgo));
+      const rows = await db
+        .select({
+          date: sql<string>`DATE(${heartbeatRuns.createdAt} AT TIME ZONE 'UTC')`.as("date"),
+          status: heartbeatRuns.status,
+          count: sql<number>`count(*)`.as("count"),
+        })
+        .from(heartbeatRuns)
+        .where(condition)
+        .groupBy(sql`DATE(${heartbeatRuns.createdAt} AT TIME ZONE 'UTC')`, heartbeatRuns.status);
+      return rows.map((r) => ({ ...r, count: Number(r.count) }));
+    },
+
+    latestFailed: async (companyId: string) => {
+      const latestRows = await db.execute(sql`
+        SELECT DISTINCT ON (agent_id)
+          id,
+          status
+        FROM heartbeat_runs
+        WHERE company_id = ${companyId}
+        ORDER BY agent_id, created_at DESC
+      `);
+      const rawRows = Array.isArray(latestRows) ? latestRows : (latestRows.rows ?? []);
+      const failedIds = (rawRows as { id: string; status: string }[])
+        .filter((r) => r.status === "failed" || r.status === "timed_out")
+        .map((r) => r.id);
+      if (failedIds.length === 0) return [];
+      const safeForLegacyEncoding = await hasUnsafeTextProjectionDatabase();
+      const rows = await db
+        .select(
+          safeForLegacyEncoding
+            ? {
+                ...heartbeatRunListColumns,
+                error: sql<string | null>`NULL`.as("error"),
+                ...heartbeatRunListContextColumns,
+              }
+            : {
+                ...heartbeatRunListColumns,
+                ...heartbeatRunListContextColumns,
+                ...heartbeatRunListResultColumns,
+              },
+        )
+        .from(heartbeatRuns)
+        .where(and(eq(heartbeatRuns.companyId, companyId), inArray(heartbeatRuns.id, failedIds)))
+        .orderBy(desc(heartbeatRuns.createdAt), desc(heartbeatRuns.id))
+        .limit(500);
+      return rows.map((row) => {
+        const {
+          contextIssueId, contextTaskId, contextTaskKey, contextCommentId,
+          contextWakeCommentId, contextWakeReason, contextWakeSource, contextWakeTriggerDetail,
+          resultSummary, resultResult, resultMessage, resultError,
+          resultTotalCostUsd, resultCostUsd, resultCostUsdCamel, ...rest
+        } = row as typeof row & {
+          resultSummary?: string | null; resultResult?: string | null; resultMessage?: string | null;
+          resultError?: string | null; resultTotalCostUsd?: string | null;
+          resultCostUsd?: string | null; resultCostUsdCamel?: string | null;
+        };
+        return {
+          ...rest,
+          contextSnapshot: summarizeHeartbeatRunContextSnapshot({
+            issueId: contextIssueId, taskId: contextTaskId, taskKey: contextTaskKey,
+            commentId: contextCommentId, wakeCommentId: contextWakeCommentId,
+            wakeReason: contextWakeReason, wakeSource: contextWakeSource,
+            wakeTriggerDetail: contextWakeTriggerDetail,
+          }),
+          resultJson: safeForLegacyEncoding
+            ? null
+            : summarizeHeartbeatRunListResultJson({
+                summary: resultSummary, result: resultResult, message: resultMessage,
+                error: resultError, totalCostUsd: resultTotalCostUsd,
+                costUsd: resultCostUsd, costUsdCamel: resultCostUsdCamel,
               }),
         };
       });
