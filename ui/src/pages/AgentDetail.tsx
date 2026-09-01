@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { useParams, useNavigate, Link, Navigate, useBeforeUnload, type NavigateFunction } from "@/lib/router";
-import { useQuery, useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, useInfiniteQuery, type QueryClient } from "@tanstack/react-query";
 import {
   agentsApi,
   type AgentKey,
@@ -878,10 +878,33 @@ export function AgentDetail() {
     enabled: Boolean(resolvedAgentId) && needsDashboardData,
   });
 
-  const { data: heartbeats } = useQuery({
+  const {
+    data: heartbeatsData,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
     queryKey: queryKeys.heartbeats(resolvedCompanyId!, agent?.id ?? undefined),
-    queryFn: () => heartbeatsApi.list(resolvedCompanyId!, agent?.id ?? undefined),
+    queryFn: ({ pageParam = 0 }) =>
+      heartbeatsApi.list(resolvedCompanyId!, agent?.id ?? undefined, 25, pageParam as number),
+    getNextPageParam: (lastPage, allPages) =>
+      lastPage.length === 25 ? allPages.length * 25 : undefined,
     enabled: !!resolvedCompanyId && !!agent?.id && shouldLoadHeartbeats,
+    initialPageParam: 0,
+  });
+
+  const heartbeats = heartbeatsData?.pages.flat()
+    ? Array.from(
+        new Map(
+          heartbeatsData.pages.flat().map((run) => [run.id, run]),
+        ).values(),
+      )
+    : undefined;
+
+  const { data: runStats } = useQuery({
+    queryKey: [...queryKeys.heartbeats(resolvedCompanyId!, agent?.id ?? undefined), "stats"],
+    queryFn: () => heartbeatsApi.stats(resolvedCompanyId!, agent?.id ?? undefined),
+    enabled: !!resolvedCompanyId && !!agent?.id && needsDashboardData,
   });
 
   const { data: allIssues } = useQuery({
@@ -1479,6 +1502,7 @@ export function AgentDetail() {
         <AgentOverview
           agent={agent}
           runs={heartbeats ?? []}
+          runStats={runStats ?? []}
           assignedIssues={assignedIssues}
           runtimeState={runtimeState}
           agentId={agent.id}
@@ -1545,6 +1569,9 @@ export function AgentDetail() {
           selectedRunId={urlRunId ?? null}
           adapterType={agent.adapterType}
           adapterConfig={agent.adapterConfig}
+          hasNextPage={hasNextPage}
+          fetchNextPage={fetchNextPage}
+          isFetchingNextPage={isFetchingNextPage}
         />
       )}
 
@@ -1761,6 +1788,7 @@ function LatestRunCard({
 function AgentOverview({
   agent,
   runs,
+  runStats,
   assignedIssues,
   runtimeState,
   agentId,
@@ -1768,6 +1796,7 @@ function AgentOverview({
 }: {
   agent: AgentDetailRecord;
   runs: HeartbeatRun[];
+  runStats: import("../api/heartbeats").HeartbeatRunStats[];
   assignedIssues: { id: string; title: string; status: string; priority: string; identifier?: string | null; createdAt: Date }[];
   runtimeState?: AgentRuntimeState;
   agentId: string;
@@ -3188,6 +3217,9 @@ function RunsTab({
   selectedRunId,
   adapterType,
   adapterConfig,
+  hasNextPage,
+  fetchNextPage,
+  isFetchingNextPage,
 }: {
   runs: HeartbeatRun[];
   companyId: string;
@@ -3196,6 +3228,9 @@ function RunsTab({
   selectedRunId: string | null;
   adapterType: string;
   adapterConfig: Record<string, unknown>;
+  hasNextPage?: boolean;
+  fetchNextPage?: () => void;
+  isFetchingNextPage?: boolean;
 }) {
   const { isMobile } = useSidebar();
 
@@ -3233,6 +3268,17 @@ function RunsTab({
         {sorted.map((run) => (
           <RunListItem key={run.id} run={run} isSelected={false} agentId={agentRouteId} />
         ))}
+        {hasNextPage && (
+          <div className="p-2 text-center">
+            <button
+              onClick={() => fetchNextPage?.()}
+              disabled={isFetchingNextPage}
+              className="text-sm text-muted-foreground hover:text-foreground"
+            >
+              {isFetchingNextPage ? "Loading…" : "Load more"}
+            </button>
+          </div>
+        )}
       </div>
     );
   }
@@ -3249,6 +3295,17 @@ function RunsTab({
         {sorted.map((run) => (
           <RunListItem key={run.id} run={run} isSelected={run.id === effectiveRunId} agentId={agentRouteId} />
         ))}
+        {hasNextPage && (
+          <div className="p-2 text-center border-t border-border">
+            <button
+              onClick={() => fetchNextPage?.()}
+              disabled={isFetchingNextPage}
+              className="text-sm text-muted-foreground hover:text-foreground"
+            >
+              {isFetchingNextPage ? "Loading…" : "Load more"}
+            </button>
+          </div>
+        )}
         </div>
       </div>
 

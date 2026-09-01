@@ -85,15 +85,30 @@ export interface HeartbeatRunListOptions {
   summary?: boolean;
 }
 
+export interface HeartbeatRunStats {
+  date: string;
+  status: string;
+  count: number;
+}
+
 export const heartbeatsApi = {
-  list: (companyId: string, agentId?: string, limit?: number, options: HeartbeatRunListOptions = {}) => {
+  list: (companyId: string, agentId?: string, limit?: number, offset?: number, options: HeartbeatRunListOptions = {}) => {
     const searchParams = new URLSearchParams();
     if (agentId) searchParams.set("agentId", agentId);
     if (limit) searchParams.set("limit", String(limit));
+    if (offset !== undefined) searchParams.set("offset", String(offset));
     if (options.summary) searchParams.set("summary", "true");
     const qs = searchParams.toString();
     return api.get<HeartbeatRun[]>(`/companies/${companyId}/heartbeat-runs${qs ? `?${qs}` : ""}`);
   },
+  stats: (companyId: string, agentId?: string) => {
+    const searchParams = new URLSearchParams();
+    if (agentId) searchParams.set("agentId", agentId);
+    const qs = searchParams.toString();
+    return api.get<HeartbeatRunStats[]>(`/companies/${companyId}/heartbeat-runs/stats${qs ? `?${qs}` : ""}`);
+  },
+  latestFailed: (companyId: string) =>
+    api.get<HeartbeatRun[]>(`/companies/${companyId}/heartbeat-runs/latest-failed`),
   get: (runId: string) => api.get<HeartbeatRun>(`/heartbeat-runs/${runId}`),
   events: (runId: string, afterSeq = 0, limit = 200) =>
     api.get<HeartbeatRunEvent[]>(
