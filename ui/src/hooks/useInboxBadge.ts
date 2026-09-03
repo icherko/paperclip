@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { accessApi } from "../api/access";
 import { ApiError } from "../api/client";
@@ -9,11 +9,6 @@ import { dashboardApi } from "../api/dashboard";
 import { heartbeatsApi } from "../api/heartbeats";
 import { issuesApi } from "../api/issues";
 import { queryKeys } from "../lib/queryKeys";
-import {
-  filterLocalInboxArchivedIssues,
-  useLocalInboxArchiveIssueIds,
-} from "../lib/inboxArchiveCache";
-import { usePublishSharedQueryData, useSharedPollingQuery } from "./useSharedPolling";
 import {
   buildInboxDismissedAtByKey,
   computeInboxBadgeData,
@@ -27,7 +22,6 @@ import {
 
 const INBOX_ISSUE_STATUSES = "backlog,todo,in_progress,in_review,blocked,done";
 const INBOX_BADGE_ISSUE_LIMIT = 500;
-const INBOX_BADGE_HOT_PATH_STALE_MS = 30_000;
 
 export function useDismissedInboxAlerts() {
   const [dismissed, setDismissed] = useState<Set<string>>(loadDismissedInboxAlerts);
@@ -92,28 +86,9 @@ export function useInboxDismissals(companyId: string | null | undefined) {
     },
     onSettled: () => {
       if (!companyId) return;
-      invalidateDismissalConsumers();
+      queryClient.invalidateQueries({ queryKey });
+      queryClient.invalidateQueries({ queryKey: queryKeys.sidebarBadges(companyId) });
     },
-  });
-
-  function invalidateDismissalConsumers() {
-    if (!companyId) return;
-    queryClient.invalidateQueries({ queryKey });
-    queryClient.invalidateQueries({ queryKey: queryKeys.sidebarBadges(companyId) });
-    // The attention feed derives its rows from server-side dismissals, so any
-    // dismiss/snooze/restore must re-pull it to keep the queue and curtains in sync.
-    queryClient.invalidateQueries({ queryKey: queryKeys.attention(companyId) });
-  }
-
-  const snoozeMutation = useMutation({
-    mutationFn: ({ itemKey, snoozedUntil }: { itemKey: string; snoozedUntil: string }) =>
-      inboxDismissalsApi.snooze(companyId!, itemKey, snoozedUntil),
-    onSettled: invalidateDismissalConsumers,
-  });
-
-  const restoreMutation = useMutation({
-    mutationFn: ({ itemKey }: { itemKey: string }) => inboxDismissalsApi.restore(companyId!, itemKey),
-    onSettled: invalidateDismissalConsumers,
   });
 
   const dismissedAtByKey = useMemo(
@@ -121,25 +96,11 @@ export function useInboxDismissals(companyId: string | null | undefined) {
     [dismissals],
   );
 
-  // Stable identities (react-query keeps `mutate` referentially stable) so
-  // consumers can hand these to memoized rows without breaking memoization.
-  const dismissMutate = dismissMutation.mutate;
-  const snoozeMutate = snoozeMutation.mutate;
-  const restoreMutate = restoreMutation.mutate;
-  const dismiss = useCallback((itemKey: string) => dismissMutate({ itemKey }), [dismissMutate]);
-  const snooze = useCallback(
-    (itemKey: string, snoozedUntil: string) => snoozeMutate({ itemKey, snoozedUntil }),
-    [snoozeMutate],
-  );
-  const restore = useCallback((itemKey: string) => restoreMutate({ itemKey }), [restoreMutate]);
-
   return {
     dismissals,
     dismissedAtByKey,
-    dismiss,
-    snooze,
-    restore,
-    isPending: dismissMutation.isPending || snoozeMutation.isPending || restoreMutation.isPending,
+    dismiss: (itemKey: string) => dismissMutation.mutate({ itemKey }),
+    isPending: dismissMutation.isPending,
   };
 }
 
@@ -177,7 +138,6 @@ export function useReadInboxItems() {
 }
 
 export function useInboxBadge(companyId: string | null | undefined) {
-  const locallyArchivedIssueIds = useLocalInboxArchiveIssueIds(companyId);
   const { dismissed: dismissedAlerts } = useDismissedInboxAlerts();
   const { dismissedAtByKey } = useInboxDismissals(companyId);
   const { data: session } = useQuery({
@@ -207,29 +167,14 @@ export function useInboxBadge(companyId: string | null | undefined) {
     retry: false,
   });
 
-  const dashboardQueryKey = queryKeys.dashboard(companyId!);
-  const sharedDashboard = useSharedPollingQuery({
-    companyId,
-    resourceKey: "dashboard",
-    queryKey: dashboardQueryKey,
-    enabled: !!companyId,
-  });
-  const { data: dashboard, dataUpdatedAt: dashboardUpdatedAt } = useQuery({
-    queryKey: dashboardQueryKey,
+  const { data: dashboard } = useQuery({
+    queryKey: queryKeys.dashboard(companyId!),
     queryFn: () => dashboardApi.summary(companyId!),
     enabled: !!companyId,
   });
-  usePublishSharedQueryData(sharedDashboard, dashboard, dashboardUpdatedAt);
 
-  const mineIssuesQueryKey = queryKeys.issues.listMineByMe(companyId!);
-  const sharedMineIssues = useSharedPollingQuery({
-    companyId,
-    resourceKey: "inbox-badge:mine-issues",
-    queryKey: mineIssuesQueryKey,
-    enabled: !!companyId,
-  });
-  const { data: mineIssuesRaw = [], dataUpdatedAt: mineIssuesUpdatedAt } = useQuery({
-    queryKey: mineIssuesQueryKey,
+  const { data: mineIssuesRaw = [] } = useQuery({
+    queryKey: queryKeys.issues.listMineByMe(companyId!),
     queryFn: () =>
       issuesApi.list(companyId!, {
         touchedByUserId: "me",
@@ -238,23 +183,15 @@ export function useInboxBadge(companyId: string | null | undefined) {
         limit: INBOX_BADGE_ISSUE_LIMIT,
       }),
     enabled: !!companyId,
-    refetchOnWindowFocus: false,
-    staleTime: INBOX_BADGE_HOT_PATH_STALE_MS,
   });
-  usePublishSharedQueryData(sharedMineIssues, mineIssuesRaw, mineIssuesUpdatedAt);
 
-  const mineIssues = useMemo(
-    () => getRecentTouchedIssues(filterLocalInboxArchivedIssues(companyId, mineIssuesRaw)),
-    [companyId, locallyArchivedIssueIds, mineIssuesRaw],
-  );
+  const mineIssues = useMemo(() => getRecentTouchedIssues(mineIssuesRaw), [mineIssuesRaw]);
   const currentUserId = session?.user.id ?? session?.session.userId ?? null;
 
   const { data: latestFailedRuns = [] } = useQuery({
     queryKey: [...queryKeys.heartbeats(companyId!), "latest-failed"],
     queryFn: () => heartbeatsApi.latestFailed(companyId!),
     enabled: !!companyId,
-    refetchOnWindowFocus: false,
-    staleTime: INBOX_BADGE_HOT_PATH_STALE_MS,
   });
 
   return useMemo(

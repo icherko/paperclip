@@ -1,6 +1,7 @@
 import type {
   HeartbeatRun,
   HeartbeatRunEvent,
+  InstanceSchedulerHeartbeatAgent,
   WorkspaceOperation,
 } from "@paperclipai/shared";
 import { api } from "./client";
@@ -15,7 +16,6 @@ export interface RunLivenessFields {
 
 export interface ActiveRunForIssue {
   id: string;
-  runtimeMode?: "legacy" | "native";
   status: string;
   invocationSource: string;
   triggerDetail: string | null;
@@ -36,16 +36,10 @@ export interface ActiveRunForIssue {
   lastUsefulActionAt?: string | Date | null;
   nextAction?: string | null;
   outputSilence?: HeartbeatRun["outputSilence"];
-  currentStatusMessage?: string | null;
-  currentStatusUpdatedAt?: string | Date | null;
-  currentToolName?: string | null;
-  lastAssistantSnippet?: string | null;
-  lastEventAt?: string | Date | null;
 }
 
 export interface LiveRunForIssue {
   id: string;
-  runtimeMode?: "legacy" | "native";
   status: string;
   invocationSource: string;
   triggerDetail: string | null;
@@ -66,11 +60,6 @@ export interface LiveRunForIssue {
   lastUsefulActionAt?: string | null;
   nextAction?: string | null;
   outputSilence?: HeartbeatRun["outputSilence"];
-  currentStatusMessage?: string | null;
-  currentStatusUpdatedAt?: string | null;
-  currentToolName?: string | null;
-  lastAssistantSnippet?: string | null;
-  lastEventAt?: string | null;
 }
 
 export interface WatchdogDecisionInput {
@@ -81,10 +70,6 @@ export interface WatchdogDecisionInput {
   snoozedUntil?: string | null;
 }
 
-export interface HeartbeatRunListOptions {
-  summary?: boolean;
-}
-
 export interface HeartbeatRunStats {
   date: string;
   status: string;
@@ -92,12 +77,11 @@ export interface HeartbeatRunStats {
 }
 
 export const heartbeatsApi = {
-  list: (companyId: string, agentId?: string, limit?: number, offset?: number, options: HeartbeatRunListOptions = {}) => {
+  list: (companyId: string, agentId?: string, limit?: number, offset?: number) => {
     const searchParams = new URLSearchParams();
     if (agentId) searchParams.set("agentId", agentId);
     if (limit) searchParams.set("limit", String(limit));
     if (offset !== undefined) searchParams.set("offset", String(offset));
-    if (options.summary) searchParams.set("summary", "true");
     const qs = searchParams.toString();
     return api.get<HeartbeatRun[]>(`/companies/${companyId}/heartbeat-runs${qs ? `?${qs}` : ""}`);
   },
@@ -107,7 +91,7 @@ export const heartbeatsApi = {
     const qs = searchParams.toString();
     return api.get<HeartbeatRunStats[]>(`/companies/${companyId}/heartbeat-runs/stats${qs ? `?${qs}` : ""}`);
   },
-  latestFailed: (companyId: string) =>
+  latestFailed: (companyId: string) => 
     api.get<HeartbeatRun[]>(`/companies/${companyId}/heartbeat-runs/latest-failed`),
   get: (runId: string) => api.get<HeartbeatRun>(`/heartbeat-runs/${runId}`),
   events: (runId: string, afterSeq = 0, limit = 200) =>
@@ -150,4 +134,6 @@ export const heartbeatsApi = {
     const qs = searchParams.toString();
     return api.get<LiveRunForIssue[]>(`/companies/${companyId}/live-runs${qs ? `?${qs}` : ""}`);
   },
+  listInstanceSchedulerAgents: () =>
+    api.get<InstanceSchedulerHeartbeatAgent[]>("/instance/scheduler-heartbeats"),
 };

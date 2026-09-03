@@ -213,8 +213,14 @@ A change is done when all are true:
 2. Typecheck, tests, and build pass
 3. Contracts are synced across db/shared/server/ui
 4. Docs updated when behavior or commands change
+
 5. PR description follows the [PR template](.github/PULL_REQUEST_TEMPLATE.md) with all sections filled in (including Model Used)
 
 ## Design system
 
 `DESIGN.md` at the repo root is the source of truth for UI design decisions. The token-only rule applies to all `ui/` changes: every color, spacing, radius, type, shadow, and motion value in `ui/src/components/**` and `ui/src/pages/**` comes from the token layer in `ui/src/index.css` — no hex, raw px, arbitrary Tailwind bracket values, or raw `font-size`/`fontSize` declarations in components, outside the documented allowlist in `ui/src/index.css`. Run `pnpm check:token-gates` (`scripts/check-token-gates.mjs`) before committing UI changes — it fails on any violation not covered by that allowlist.
+
+## Learnings
+
+- 2026-03-15: When using Drizzle `db.execute` for raw SQL in this repo, ensure you test the return type (it may return raw rows directly instead of a `QueryResult` object with a `.rows` property depending on the database driver).
+- 2026-03-15: When implementing `IntersectionObserver` for infinite scrolling with React Query, ensure `isFetchingNextPage` is checked inside the callback but NOT included in the React `useEffect` dependency array, otherwise it causes an infinite fetch loop.

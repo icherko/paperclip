@@ -105,10 +105,15 @@ export const heartbeatRuns = pgTable(
       table.agentId,
       table.startedAt,
     ),
-    companyResponsibleUserIdx: index("heartbeat_runs_company_responsible_user_idx").on(
+    companyCreatedAtIdx: index("heartbeat_runs_company_created_at_idx").on(
       table.companyId,
-      table.responsibleUserId,
-      table.createdAt,
+      table.createdAt.desc(),
+    ),
+    companyIssueIdCreatedIdx: index("heartbeat_runs_company_issueid_created_idx").on(
+      table.companyId,
+      sql`(${table.contextSnapshot} ->> 'issueId')`,
+      table.createdAt.desc(),
+      table.id.desc(),
     ),
     companyLivenessIdx: index("heartbeat_runs_company_liveness_idx").on(
       table.companyId,

@@ -13,6 +13,7 @@ coverage/
 ._*
 .AppleDouble
 .LSOverride
+**/._.DS_Store
 data/
 .paperclip/
 .pnpm-store/
