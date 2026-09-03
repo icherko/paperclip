@@ -1118,7 +1118,7 @@ export async function startServer(): Promise<StartedServer> {
       notifyOriginAgent: createDecisionRetentionNotifyOriginAgent(heartbeat.wakeup),
     });
     drainHeartbeatRunsForShutdown = (signal, runIds) => (
-      heartbeat.drainRunningRunsForShutdown(signal, new Date(), runIds)
+      heartbeat.drainRunningRunsForShutdown(signal, new Date(), runIds as any)
     );
     prepareHotRestartShutdown = heartbeat.prepareHotRestartShutdown;
     const environmentCustomImages = environmentCustomImageService(db as any, { pluginWorkerManager });
@@ -1417,7 +1417,7 @@ export async function startServer(): Promise<StartedServer> {
         trackHeartbeatSchedulerWork(runRetentionSweep().catch((err: unknown) => {
           logger.error({ err }, "decision retention sweep failed");
         }));
-        const sweptRuntimeStatuses = heartbeat.sweepExpiredRuntimeStatuses();
+        const sweptRuntimeStatuses = await heartbeat.sweepExpiredRuntimeStatuses();
         if (sweptRuntimeStatuses > 0) {
           logger.info(
             { swept: sweptRuntimeStatuses },

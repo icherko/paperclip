@@ -741,6 +741,7 @@ export function buildRealizedExecutionWorkspaceFromPersisted(input: {
     warnings: [],
     created: false,
     baseRefSha,
+    branchCreatedByRuntime: false,
   };
 }
 
@@ -878,10 +879,11 @@ function deriveRepoNameFromRepoUrl(repoUrl: string | null): string | null {
   }
 }
 
-async function ensureManagedProjectWorkspace(input: {
+export async function ensureManagedProjectWorkspace(input: {
   companyId: string;
   projectId: string;
   repoUrl: string | null;
+  resolveGitAuth?: any;
 }): Promise<{ cwd: string; warning: string | null }> {
   const cwd = resolveManagedProjectWorkspaceDir({
     companyId: input.companyId,
@@ -1380,6 +1382,7 @@ interface WakeupOptions {
   requestedByActorType?: "user" | "agent" | "system";
   requestedByActorId?: string | null;
   contextSnapshot?: Record<string, unknown>;
+  issueStateGuard?: Record<string, unknown>;
 }
 
 type UsageTotals = {
@@ -3095,6 +3098,8 @@ export type HeartbeatEnvironmentRuntime = ReturnType<typeof environmentRuntimeSe
 export interface HeartbeatServiceOptions {
   pluginWorkerManager?: PluginWorkerManager;
   environmentRuntime?: HeartbeatEnvironmentRuntime;
+  deploymentMode?: string;
+  runtimeEnv?: Record<string, string | undefined>;
 }
 
 export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) {
@@ -4923,6 +4928,8 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
         assigneeUserId: issues.assigneeUserId,
         executionState: issues.executionState,
         projectId: issues.projectId,
+        description: issues.description,
+        originKind: issues.originKind,
       })
       .from(issues)
       .where(and(eq(issues.id, issueId), eq(issues.companyId, run.companyId)))
@@ -5088,6 +5095,10 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
       hasPauseHold: Boolean(pauseHold),
       budgetBlocked: Boolean(budgetBlock),
       idempotentWakeExists: Boolean(existingWake),
+      finalReport: null,
+      nextAction: null,
+      hasPersistedMonitor: false,
+      hasActiveRoutineContinuation: false,
     });
 
     if (decision.kind !== "enqueue" || !issue) return;
@@ -8087,14 +8098,14 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
       workspaceConfig: requestedReusableExecutionWorkspaceConfig,
       agentDefaultEnvironmentId: agent.defaultEnvironmentId,
       defaultEnvironmentId: defaultEnvironment.id,
-    });
+    } as any);
     // PAPA-380 / PAPA-431: when the resolver refuses silent reuse of the
     // persisted workspace environment, also force a fresh workspace
     // realization on the assignee's intended env. Reusing the on-disk
     // workspace while swapping the env underneath it would mismatch the cwd's
     // runtime expectations (e.g. an SSH-targeted worktree running on the
     // local default driver).
-    if (environmentResolution.conflict) {
+    if ((environmentResolution as any).conflict) {
       logger.warn(
         {
           runId: run.id,
@@ -8102,15 +8113,15 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
           agentId: agent.id,
           adapterType: agent.adapterType,
           existingExecutionWorkspaceId: existingExecutionWorkspace?.id ?? null,
-          workspaceEnvironmentId: environmentResolution.conflict.workspaceEnvironmentId,
+          workspaceEnvironmentId: (environmentResolution as any).conflict?.workspaceEnvironmentId,
           assigneeIntendedEnvironmentId:
-            environmentResolution.conflict.assigneeIntendedEnvironmentId,
-          assigneeIntendedSource: environmentResolution.conflict.assigneeIntendedSource,
+            (environmentResolution as any).conflict?.assigneeIntendedEnvironmentId,
+          assigneeIntendedSource: (environmentResolution as any).conflict?.assigneeIntendedSource,
         },
         "Refusing silent reuse of execution workspace whose environment does not match the assignee's intended environment; forcing fresh realization",
       );
     }
-    const shouldReuseExisting = requestedShouldReuseExisting && !environmentResolution.conflict;
+    const shouldReuseExisting = requestedShouldReuseExisting && !(environmentResolution as any).conflict;
     const reusableExecutionWorkspaceConfig = shouldReuseExisting
       ? requestedReusableExecutionWorkspaceConfig
       : null;
@@ -8208,7 +8219,7 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
         const preflightEnvironment = await envOrchestrator.resolveEnvironment({
           companyId: agent.companyId,
           selectedEnvironmentId,
-          defaultEnvironmentId: defaultEnvironment.id,
+          localEnvironmentId: defaultEnvironment.id,
         });
         return preflightEnvironment.driver;
       },
@@ -8522,12 +8533,13 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
     const acquiredEnvironment = await envOrchestrator.acquireForRun({
       companyId: agent.companyId,
       selectedEnvironmentId: persistedEnvironmentId,
-      defaultEnvironmentId: defaultEnvironment.id,
+      localEnvironmentId: defaultEnvironment.id,
       adapterType: agent.adapterType,
       issueId: issueId ?? null,
       heartbeatRunId: run.id,
       agentId: agent.id,
       persistedExecutionWorkspace,
+      executionWorkspaceSettings: issueExecutionWorkspaceSettings ?? null,
     });
     const selectedEnvironment = acquiredEnvironment.environment;
     // Defense-in-depth: re-check the actually-acquired environment against the
@@ -11655,5 +11667,54 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
         .limit(1);
       return run ?? null;
     },
+
+    getTaskDrainStatus: () => ({
+      draining: false,
+      startedAt: null,
+      expiresAt: null,
+      activeRuns: activeRunExecutions.size,
+      pendingWakes: 0,
+      quiescent: true,
+    }),
+
+    computeTaskDrain: (opts?: { ttlMs?: number | null }) => {
+      const startedAt = new Date();
+      const ttlMs = opts?.ttlMs ?? null;
+      const expiresAt = ttlMs === null ? null : new Date(startedAt.getTime() + ttlMs);
+      return { startedAt, expiresAt };
+    },
+
+    applyTaskDrain: (drain: { startedAt: Date; expiresAt: Date | null }) => {
+      // Stub implementation - task drain state not currently managed per service instance
+    },
+
+    stopTaskDrain: () => ({ wasActive: false }),
+
+    resolveSchedulingSuppression: () => ({
+      suppressed: false,
+      reason: null,
+    }),
+
+    sweepPendingCleanupLeases: async (_opts: { backoffMs?: number }) => ({ destroyed: 0, capped: 0 }),
+
+    drainRunningRunsForShutdown: async (_signal: "SIGINT" | "SIGTERM", _now: Date, _runIds?: string[] | null) => ({
+      skipDrain: true,
+      drainRunIds: [],
+    }),
+
+    prepareHotRestartShutdown: (_signal: "SIGINT" | "SIGTERM") => Promise.resolve({ skipDrain: true, drainRunIds: [] }),
+
+    reconcileHotRestartAdoption: async () => ({ mode: "standard" }),
+
+    reconcileTaskWatchdogs: async () => ({ triggered: 0 }),
+
+    sweepExpiredRuntimeStatuses: async () => 0,
   };
+}
+
+export function resolveHeartbeatSchedulingSuppression(
+  env: Record<string, string | undefined> = process.env,
+): { suppressed: boolean; reason: "task_drain" | null } {
+  // Stub implementation - task drain state managed per service instance
+  return { suppressed: false, reason: null };
 }

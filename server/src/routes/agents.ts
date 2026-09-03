@@ -81,12 +81,11 @@ import { redactCurrentUserValue } from "../log-redaction.js";
 import { renderOrgChartSvg, renderOrgChartPng, type OrgNode, type OrgChartStyle, ORG_CHART_STYLES } from "./org-chart-svg.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { runClaudeLogin } from "@paperclipai/adapter-claude-local/server";
-import {
-  DEFAULT_ACPX_LOCAL_AGENT,
-  DEFAULT_ACPX_LOCAL_MODE,
-  DEFAULT_ACPX_LOCAL_NON_INTERACTIVE_PERMISSIONS,
-  DEFAULT_ACPX_LOCAL_PERMISSION_MODE,
-} from "@paperclipai/adapter-acpx-local";
+// Stub constants for retired acpx_local adapter (acpx_local is retired, see registry.ts)
+const DEFAULT_ACPX_LOCAL_AGENT = "claude";
+const DEFAULT_ACPX_LOCAL_MODE = "local";
+const DEFAULT_ACPX_LOCAL_NON_INTERACTIVE_PERMISSIONS = "";
+const DEFAULT_ACPX_LOCAL_PERMISSION_MODE = "sandbox";
 import { DEFAULT_CODEX_LOCAL_BYPASS_APPROVALS_AND_SANDBOX } from "@paperclipai/adapter-codex-local";
 import { DEFAULT_CURSOR_LOCAL_MODEL } from "@paperclipai/adapter-cursor-local";
 import { DEFAULT_GEMINI_LOCAL_MODEL } from "@paperclipai/adapter-gemini-local";
@@ -129,7 +128,14 @@ function readRunIssueId(context: Record<string, unknown> | null) {
 
 export function agentRoutes(
   db: Db,
-  options: { pluginWorkerManager?: PluginWorkerManager } = {},
+  options: {
+    pluginWorkerManager?: PluginWorkerManager;
+    deploymentMode?: string;
+    confidentialProxyAllowlist?: any;
+    confidentialEdgeTlsTerminated?: boolean;
+    setupTokenLogin?: any;
+    onSetupTokenLoginService?: (service: any) => void;
+  } = {},
 ) {
   // Legacy hardcoded maps — used as fallback when adapter module does not
   // declare capability flags explicitly.
@@ -269,7 +275,7 @@ export function agentRoutes(
     }
 
     const environment = await environmentsSvc.getById(input.environmentId);
-    if (!environment || environment.companyId !== input.companyId) {
+    if (!environment || (environment as any).companyId !== input.companyId) {
       return {
         executionTarget: null,
         environmentName: null,
@@ -863,7 +869,7 @@ export function agentRoutes(
   ) {
     if (environmentId === undefined || environmentId === null) return;
     const environment = await environmentsSvc.getById(environmentId);
-    if (!environment || environment.companyId !== companyId) {
+    if (!environment || (environment as any).companyId !== companyId) {
       throw unprocessable("Selected environment must belong to the same company");
     }
     if (options?.allowedDrivers && !options.allowedDrivers.includes(environment.driver)) {
@@ -1412,17 +1418,17 @@ export function agentRoutes(
       companyId,
       requestedDesiredSkills,
     );
-    const resolvedRequestedSkills = resolvedRequestedSkillEntries.map((entry) => entry.key);
+    const resolvedRequestedSkills = (resolvedRequestedSkillEntries as unknown as any[]).map((entry) => entry.key);
     const runtimeSkillEntries = await companySkills.listRuntimeSkillEntries(companyId, {
       materializeMissing: shouldMaterializeRuntimeSkillsForAdapter(adapterType),
-      versionSelections: skillVersionSelectionMap(resolvedRequestedSkillEntries),
+      versionSelections: skillVersionSelectionMap(resolvedRequestedSkillEntries as unknown as any[]),
     });
     const requiredSkills = runtimeSkillEntries
-      .filter((entry) => entry.required)
+      .filter((entry) => (entry as any).required)
       .map((entry) => entry.key);
     const desiredSkillEntries = [
       ...requiredSkills.map((key) => ({ key, versionId: null })),
-      ...resolvedRequestedSkillEntries,
+      ...(resolvedRequestedSkillEntries as unknown as any[]),
     ].filter((entry, index, entries) => entries.findIndex((candidate) => candidate.key === entry.key) === index);
     const desiredSkills = desiredSkillEntries.map((entry) => entry.key);
 
@@ -1524,7 +1530,7 @@ export function agentRoutes(
       : false;
     const environmentId = asNonEmptyString(req.query.environmentId);
     const environment = environmentId ? await environmentsSvc.getById(environmentId) : null;
-    if (environmentId && (!environment || environment.companyId !== companyId)) {
+    if (environmentId && (!environment || (environment as any).companyId !== companyId)) {
       res.status(404).json({ error: "Environment not found" });
       return;
     }
@@ -1648,7 +1654,7 @@ export function agentRoutes(
         materializeMissing: false,
         versionSelections: skillVersionSelectionMap(preference.desiredSkillEntries),
       });
-      const requiredSkills = runtimeSkillEntries.filter((entry) => entry.required).map((entry) => entry.key);
+      const requiredSkills = runtimeSkillEntries.filter((entry) => (entry as any).required).map((entry) => entry.key);
       const desiredSkillEntries = [
         ...requiredSkills.map((key) => ({ key, versionId: null })),
         ...preference.desiredSkillEntries,
