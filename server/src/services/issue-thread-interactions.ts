@@ -653,6 +653,30 @@ function shouldReturnAcceptedConfirmationToCreatorAgent(args: {
   return Boolean(args.issue.assigneeUserId);
 }
 
+/**
+ * Whether a stored comment is proof that a human was present and typed it, as opposed to a
+ * script or bridge that merely authenticates as the user.
+ *
+ * `createdByRunId` alone cannot carry this: local-CLI adapters and any board-API-key-holding
+ * automation post under user auth, so `authorUserId` is set and `createdByRunId` stays null
+ * for both a genuine interactive reply and an unattended script's comment — a
+ * `human_only` interaction can silently die to the latter with no one ever seeing the card. `authSource`
+ * is the missing signal: it is the request's auth method (session / board_key /
+ * local_implicit / cloud_tenant / agent_key / agent_jwt), and only `"session"` is a live
+ * browser login. Rows written before this column existed carry `authSource: null` and are
+ * deliberately NOT treated as genuine — their true source is unknown, and assuming the best
+ * case is exactly the bug this guards against.
+ */
+function isGenuineInteractiveUserComment(comment: {
+  authorUserId?: string | null;
+  createdByRunId?: string | null;
+  authSource?: string | null;
+}) {
+  if (!comment.authorUserId) return false;
+  if (comment.createdByRunId) return false;
+  return comment.authSource === "session";
+}
+
 function shouldSupersedeInteractionOnUserComment(interaction: UserCommentSupersedableInteraction) {
   if (interaction.kind === "connection_intent") return true;
   return interaction.payload.supersedeOnUserComment === true;
@@ -3255,13 +3279,16 @@ export function issueThreadInteractionService(db: Db, opts: IssueThreadInteracti
 
     expireRequestConfirmationsSupersededByComment: async (
       issue: { id: string; companyId: string; status?: string },
-      comment: { id: string; createdAt: Date | string; authorUserId?: string | null; createdByRunId?: string | null },
+      comment: {
+        id: string;
+        createdAt: Date | string;
+        authorUserId?: string | null;
+        createdByRunId?: string | null;
+        authSource?: string | null;
+      },
       actor: InteractionActor,
     ) => {
-      if (!comment.authorUserId) return [];
-      // Local-CLI adapters post under user auth, so authorUserId can't tell a human from a
-      // machine; createdByRunId can. Only genuine human comments (no run context) supersede.
-      if (comment.createdByRunId) return [];
+      if (!isGenuineInteractiveUserComment(comment)) return [];
 
       const rows = await db
         .select()
@@ -3340,8 +3367,12 @@ export function issueThreadInteractionService(db: Db, opts: IssueThreadInteracti
             eq(issueComments.companyId, issue.companyId),
             eq(issueComments.issueId, issue.id),
             isNotNull(issueComments.authorUserId),
-            // Only genuine human comments supersede; machine-originated ones carry createdByRunId.
+            // Only a genuine interactive human comment supersedes. createdByRunId catches
+            // agent-run-attributed comments; authSource = "session" catches everything else
+            // that authenticates as the user without a live browser session (a board API key,
+            // local_implicit, cloud_tenant) — see isGenuineInteractiveUserComment.
             isNull(issueComments.createdByRunId),
+            eq(issueComments.authSource, "session"),
           ))
           .orderBy(asc(issueComments.createdAt)),
       ]);

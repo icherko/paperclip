@@ -188,6 +188,7 @@ export function boardChatRoutes(
       agentId: actor.agentId ?? undefined,
       userId: actor.agentId ? undefined : actor.actorId,
       runId: actor.runId,
+      authSource: actor.actorSource,
     });
 
     // Build conversation history from recent comments (oldest first).

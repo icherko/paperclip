@@ -1,5 +1,6 @@
 import type {
   IssueCommentAuthorType,
+  IssueCommentAuthSource,
   IssueCommentMetadataRowType,
   IssueCommentPresentationKind,
   IssueCommentPresentationTone,
@@ -951,6 +952,7 @@ export interface IssueComment {
   /** Responsible user attribution. Legacy and plugin-provided comment values may omit it. */
   onBehalfOfUserId?: string | null;
   createdByRunId?: string | null;
+  authSource?: IssueCommentAuthSource | null;
   derivedAuthorAgentId?: string | null;
   derivedCreatedByRunId?: string | null;
   derivedAuthorSource?: IssueCommentDerivedAuthorSource | null;

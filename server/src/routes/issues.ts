@@ -11020,6 +11020,7 @@ export function issueRoutes(
         userId: actor.actorType === "user" ? actor.actorId : undefined,
         runId: actor.runId,
         onBehalfOfUserId: authenticatedActorResponsibleUserId(req),
+        authSource: actor.actorSource,
       }, {
         authorizationReason: issueMutationAuthorizationReason,
         sourceTrust: await sourceTrustForActorWrite(issue, actor),
@@ -13563,6 +13564,7 @@ export function issueRoutes(
               userId: actor.actorType === "user" ? actor.actorId : undefined,
               runId: actor.runId,
               onBehalfOfUserId: authenticatedActorResponsibleUserId(req),
+              authSource: actor.actorSource,
             },
             { ...commentOptions, authorizationReason: commentAuthorizationReason },
             tx,
@@ -13637,6 +13639,7 @@ export function issueRoutes(
         userId: actor.actorType === "user" ? actor.actorId : undefined,
         runId: actor.runId,
         onBehalfOfUserId: authenticatedActorResponsibleUserId(req),
+        authSource: actor.actorSource,
       }, {
         authorType: req.body.authorType ?? (actor.actorType === "agent" ? "agent" : "user"),
         presentation: commentPresentation,

@@ -459,6 +459,7 @@ describeEmbeddedPostgres("issueThreadInteractionService telemetry", () => {
       id: commentId,
       createdAt: new Date(new Date(created.createdAt).getTime() + 1_000),
       authorUserId: "local-board",
+      authSource: "session",
     }, {
       userId: "local-board",
     });
@@ -575,6 +576,7 @@ describeEmbeddedPostgres("issueThreadInteractionService telemetry", () => {
       id: commentId,
       createdAt: new Date(new Date(created.createdAt).getTime() + 1_000),
       authorUserId: "local-board",
+      authSource: "session",
     }, {
       userId: "local-board",
     });
