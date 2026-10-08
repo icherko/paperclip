@@ -1273,6 +1273,7 @@ describeEmbeddedPostgres("issueThreadInteractionService", () => {
       id: randomUUID(),
       createdAt: new Date(createdAtMs - 1_000),
       authorUserId: "local-board",
+      authSource: "session",
     }, {
       userId: "local-board",
     })).resolves.toHaveLength(0);
@@ -3114,6 +3115,7 @@ describeEmbeddedPostgres("issueThreadInteractionService", () => {
       id: randomUUID(),
       createdAt: new Date(createdAtMs - 1_000),
       authorUserId: "local-board",
+      authSource: "session",
     }, {
       userId: "local-board",
     })).resolves.toHaveLength(0);
@@ -3150,6 +3152,7 @@ describeEmbeddedPostgres("issueThreadInteractionService", () => {
       createdAt: new Date(new Date(created.createdAt).getTime() + 1_000),
       authorUserId: "local-board",
       createdByRunId: randomUUID(),
+      authSource: "session",
     }, {
       userId: "local-board",
     });
@@ -3335,6 +3338,7 @@ describeEmbeddedPostgres("issueThreadInteractionService", () => {
       authorUserId: "local-board",
       authorType: "user",
       createdByRunId: runId,
+      authSource: "session",
       body: "SLA escalation relay posted from a heartbeat run.",
       createdAt: new Date("2026-05-18T12:01:00.000Z"),
       updatedAt: new Date("2026-05-18T12:01:00.000Z"),
