@@ -1,3 +1,17 @@
+import { setTaskMonitorAction } from "./set-task-monitor.js";
+import { setTaskTitleAction } from "./set-task-title.js";
+import { submitComplaintAction, submitSuggestionAction } from "./submit-agent-commentary.js";
+import { readAgentInstructionsAction } from "./read-agent-instructions.js";
+import { updateAgentInstructionsAction } from "./update-agent-instructions.js";
+import { getAgentInstructionHistoryAction } from "./get-agent-instruction-history.js";
+import { restoreAgentInstructionsAction } from "./restore-agent-instructions.js";
+import { reassignTaskAction } from "./reassign-task.js";
+import { createSkillAction } from "./create-skill.js";
+import { updateSkillAction } from "./update-skill.js";
+import { createProjectAction } from "./create-project.js";
+import { listProjectRepositoriesAction } from "./list-project-repositories.js";
+import { searchApiAction } from "./search-api.js";
+import { callApiAction } from "./call-api.js";
 import { administerCompanyAction } from "./administer-company.js";
 import { answerStatusQuestionAction } from "./answer-status-question.js";
 import { blockTaskAction } from "./block-task.js";
@@ -16,6 +30,7 @@ import { getTaskHistoryAction } from "./get-task-history.js";
 import { getWorkspaceRuntimeAction } from "./get-workspace-runtime.js";
 import { inspectOperationResultAction } from "./inspect-operation-result.js";
 import { listAgentsAction } from "./list-agents.js";
+import { hireAgentAction } from "./hire-agent.js";
 import { listApprovalsAction } from "./list-approvals.js";
 import { listCasesAction } from "./list-cases.js";
 import { listCompanySkillsAction } from "./list-company-skills.js";
@@ -42,6 +57,21 @@ import { writeDocumentAction } from "./write-document.js";
 import { deepFreezeProtocolAction } from "./freeze.js";
 
 export const PAPERCLIP_PROTOCOL_ACTIONS = deepFreezeProtocolAction([
+  setTaskTitleAction,
+  setTaskMonitorAction,
+  submitComplaintAction,
+  submitSuggestionAction,
+  readAgentInstructionsAction,
+  updateAgentInstructionsAction,
+  getAgentInstructionHistoryAction,
+  restoreAgentInstructionsAction,
+
+  createSkillAction,
+  updateSkillAction,
+  createProjectAction,
+  listProjectRepositoriesAction,
+  searchApiAction,
+  callApiAction,
   administerCompanyAction,
   answerStatusQuestionAction,
   blockTaskAction,
@@ -60,6 +90,7 @@ export const PAPERCLIP_PROTOCOL_ACTIONS = deepFreezeProtocolAction([
   getWorkspaceRuntimeAction,
   inspectOperationResultAction,
   listAgentsAction,
+  hireAgentAction,
   listApprovalsAction,
   listCasesAction,
   listCompanySkillsAction,
@@ -80,6 +111,7 @@ export const PAPERCLIP_PROTOCOL_ACTIONS = deepFreezeProtocolAction([
   scheduleWakeAction,
   searchTasksAction,
   setDependenciesAction,
+  reassignTaskAction,
   syncCompanySkillsAction,
   upsertCaseAction,
   writeDocumentAction,
