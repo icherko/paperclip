@@ -1024,6 +1024,7 @@ describeEmbeddedPostgres(
         {
           id: liveCommentId,
           authorUserId: "board-user",
+          authSource: "session",
           createdByRunId: null,
           createdAt: new Date(Date.now() + 1_000),
         },
@@ -1083,6 +1084,7 @@ describeEmbeddedPostgres(
         issueId: fixture.issueId,
         authorUserId: "board-user",
         authorType: "user",
+        authSource: "session",
         body: "Use the high-priority path.",
         createdAt: new Date("2026-09-05T12:01:00.000Z"),
         updatedAt: new Date("2026-09-05T12:01:00.000Z"),
