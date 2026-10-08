@@ -1420,6 +1420,7 @@ describe("issue comment reopen routes", () => {
         userId: "local-board",
         runId: null,
         onBehalfOfUserId: undefined,
+        authSource: "local_implicit",
       },
       {
         attachmentIds: undefined,
@@ -1503,6 +1504,7 @@ describe("issue comment reopen routes", () => {
         userId: undefined,
         runId: "run-1",
         onBehalfOfUserId: null,
+        authSource: "agent_key",
       },
       expect.objectContaining({
         attachmentIds: undefined,
@@ -1535,6 +1537,7 @@ describe("issue comment reopen routes", () => {
         userId: undefined,
         runId: "run-1",
         onBehalfOfUserId: null,
+        authSource: "agent_key",
       },
       expect.objectContaining({ attachmentIds: undefined, presentation: null }),
       mockDb,
@@ -1574,6 +1577,7 @@ describe("issue comment reopen routes", () => {
         userId: undefined,
         runId: "run-1",
         onBehalfOfUserId: null,
+        authSource: "agent_key",
       },
       expect.objectContaining({ attachmentIds: undefined, presentation: null }),
       mockDb,
