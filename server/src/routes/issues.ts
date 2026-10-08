@@ -17906,7 +17906,7 @@ export function issueRoutes(
             eq(issueComments.issueId, issue.id), eq(issueComments.authorUserId, userId),
             eq(issueComments.clientRequestId, req.body.clientRequestId),
           ));
-          const saved = await svc.addComment(issue.id, req.body.body, { userId, authSource: actor.actorSource }, {
+          const saved = await svc.addComment(issue.id, req.body.body, { userId, runId: actor.runId, authSource: actor.actorSource }, {
             clientRequestId: req.body.clientRequestId, authorType: "user", attachmentIds: req.body.attachmentIds,
           }, tx);
           if (!existing) await logActivity(tx as unknown as Db, {
