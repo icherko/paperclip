@@ -1,5 +1,5 @@
 {
-  "id": "3d79594b-607e-45e3-978c-7f3a0887f64d",
+  "id": "af0b2d33-956b-4b12-8d68-8b4e14c991b2",
   "prevId": "541f5e10-e2f3-44e1-b238-4d1cbfba61f2",
   "version": "7",
   "dialect": "postgresql",
@@ -30441,12 +30441,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "auth_source": {
-          "name": "auth_source",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_by_run_id": {
           "name": "created_by_run_id",
           "type": "uuid",
@@ -56260,7 +56254,7 @@
           "name": "expires_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",
